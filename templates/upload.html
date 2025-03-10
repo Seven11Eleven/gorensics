@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Загрузка изображения</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        .container { max-width: 600px; margin: auto; }
+        .scroll-box {
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+            padding: 10px;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: monospace; /* Фиксированный шрифт */
+            text-align: left;
+        }
+        img { display: block; margin: auto; border: 1px solid #ccc; max-width: 300px; height: auto; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Анализ изображения</h1>
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">Загрузить</button>
+
+    <h2 id="loadingMessage" class="hidden">Анализ выполняется...</h2>
+
+    <img id="uploadedImage" class="hidden" alt="Загруженное изображение">
+
+    <div id="results" class="hidden">
+        <h2>Результаты анализа</h2>
+
+        <div class="container">
+            <h2>zsteg</h2>
+            <div class="scroll-box" id="zsteg">⏳ Анализ...</div>
+        </div>
+
+        <div class="container">
+            <h2>strings</h2>
+            <div class="scroll-box" id="strings">⏳ Анализ...</div>
+        </div>
+
+        <div class="container">
+            <h2>exiv2 (метаданные)</h2>
+            <div class="scroll-box" id="exif">⏳ Анализ...</div>
+        </div>
+
+        <div class="container">
+            <h2>binwalk</h2>
+            <div class="scroll-box" id="binwalk">⏳ Анализ...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let taskId = null;
+
+        function uploadFile() {
+        let fileInput = document.getElementById("fileInput");
+        if (!fileInput.files.length) {
+        alert("Выберите файл!");
+        return;
+    }
+
+        let formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        fetch("/upload", {
+        method: "POST",
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+        // После успешной загрузки, перенаправляем на страницу результатов
+        window.location.href = `/result?task_id=${data.task_id}`;
+    })
+        .catch(error => console.error("Ошибка загрузки:", error));
+    }
+
+
+function checkStatus() {
+        if (!taskId) return;
+
+        fetch(`/status?task_id=${taskId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("results").classList.remove("hidden");
+
+                document.getElementById("zsteg").textContent = data.Zsteg || "⏳ Анализ...";
+                document.getElementById("strings").textContent = data.Strings || "⏳ Анализ...";
+                document.getElementById("exif").textContent = data.ExifData || "⏳ Анализ...";
+                document.getElementById("binwalk").textContent = data.BinwalkData || "⏳ Анализ...";
+
+                if (!data.Done) {
+                    setTimeout(checkStatus, 2000);
+                } else {
+                    document.getElementById("loadingMessage").classList.add("hidden");
+                }
+            })
+            .catch(error => console.error("Ошибка получения статуса:", error));
+    }
+</script>
+</body>
+</html>

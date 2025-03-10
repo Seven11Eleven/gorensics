@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результаты анализа</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .container {
+            margin-bottom: 20px;
+        }
+        .scroll-box {
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+            padding: 10px;
+            max-height: 600px;
+            overflow: auto;
+            white-space: pre-wrap;
+            resize:  both;
+            word-wrap: break-word;
+            font-family: monospace;
+            text-align: left;
+        }
+        img {
+            display: block;
+            margin: auto;
+            border: 1px solid #ccc;
+            max-width: 300px;
+            height: auto;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<h1>Результаты анализа изображения</h1>
+<img id="uploadedImage" class="hidden" alt="Загруженное изображение">
+
+<h2 id="loadingMessage">⏳ Анализ выполняется...</h2>
+
+<div id="results">
+    <div class="container">
+        <h2>zsteg</h2>
+        <div class="scroll-box" id="zsteg">⏳ Анализ...</div>
+    </div>
+
+    <div class="container">
+        <h2>strings</h2>
+        <div class="scroll-box" id="strings">⏳ Анализ...</div>
+    </div>
+
+    <div class="container">
+        <h2>exiv2 (метаданные)</h2>
+        <div class="scroll-box" id="exif">⏳ Анализ...</div>
+    </div>
+
+    <div class="container">
+        <h2>binwalk</h2>
+        <div class="scroll-box" id="binwalk">⏳ Анализ...</div>
+    </div>
+</div>
+
+<a class="back-link" href="/">⬅ Загрузить другое изображение</a>
+
+<script>
+    let taskId = new URLSearchParams(window.location.search).get("task_id");
+
+    if (!taskId) {
+        document.getElementById("loadingMessage").innerText = "Ошибка: task_id отсутствует!";
+        console.error("task_id не найден в URL");
+    } else {
+        checkStatus();
+    }
+
+    function checkStatus() {
+        fetch(`/status?task_id=${taskId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("zsteg").textContent = data.Zsteg || "⏳ Анализ...";
+                document.getElementById("strings").textContent = data.Strings || "⏳ Анализ...";
+                document.getElementById("exif").textContent = data.ExifData || "⏳ Анализ...";
+                document.getElementById("binwalk").textContent = data.BinwalkData || "⏳ Анализ...";
+
+                document.getElementById("uploadedImage").src = "/uploads/" + data.ImagePath.split('/').pop();
+                document.getElementById("uploadedImage").classList.remove("hidden");
+
+                if (!data.Done) {
+                    setTimeout(checkStatus, 2000);
+                } else {
+                    document.getElementById("loadingMessage").innerText = "✅ Анализ завершён";
+                }
+            })
+            .catch(error => console.error("Ошибка получения статуса:", error));
+    }
+</script>
+</body>
+</html>
