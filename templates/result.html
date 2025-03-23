@@ -41,6 +41,16 @@
             text-align: center;
             margin-top: 20px;
         }
+        .processed-images {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        .processed-images img {
+            max-width: 400px;
+            max-height: 400px;
+        }
     </style>
 </head>
 <body>
@@ -69,6 +79,12 @@
         <h2>binwalk</h2>
         <div class="scroll-box" id="binwalk">⏳ Анализ...</div>
     </div>
+
+    <div class="container">
+        <h2>Изменённые изображения</h2>
+        <div class="processed-images" id="processedImages">
+        </div>
+    </div>
 </div>
 
 <a class="back-link" href="/">⬅ Загрузить другое изображение</a>
@@ -95,14 +111,31 @@
                 document.getElementById("uploadedImage").src = "/uploads/" + data.ImagePath.split('/').pop();
                 document.getElementById("uploadedImage").classList.remove("hidden");
 
+                const processedImagesContainer = document.getElementById("processedImages");
+                processedImagesContainer.innerHTML = "";
+
+                if (data.ModifiedImages && data.ModifiedImages.length > 0) {
+                    data.ModifiedImages.forEach(imagePath => {
+                        const img = document.createElement("img");
+                        img.src = "/uploads/" + imagePath.split('/').pop();
+                        img.alt = "Изменённое изображение";
+                        processedImagesContainer.appendChild(img);
+                    });
+                } else {
+                    console.log("Нет изменённых изображений.");
+                }
+
                 if (!data.Done) {
                     setTimeout(checkStatus, 2000);
                 } else {
                     document.getElementById("loadingMessage").innerText = "✅ Анализ завершён";
                 }
             })
-            .catch(error => console.error("Ошибка получения статуса:", error));
+            .catch(error => {
+                console.error("Ошибка получения статуса:", error);
+            });
     }
+
 </script>
 </body>
 </html>

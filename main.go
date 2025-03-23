@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"log"
 	"math/rand"
@@ -18,12 +21,13 @@ import (
 const uploadDir = "./uploads"
 
 type AnalysisResult struct {
-	ImagePath   string
-	Zsteg       string
-	Strings     string
-	ExifData    string
-	BinwalkData string
-	Done        bool
+	ImagePath      string
+	ModifiedImages []string
+	Zsteg          string
+	Strings        string
+	ExifData       string
+	BinwalkData    string
+	Done           bool
 }
 
 var (
@@ -40,6 +44,78 @@ func runCmd(tool string, args ...string) string {
 		return fmt.Sprintf("Ошибка (%s): %v", tool, err)
 	}
 	return string(output)
+}
+
+func adjustImageBrightness(img image.Image, brightnessFactor float64) image.Image {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	adjustedImage := image.NewRGBA(bounds)
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			adjustedR := uint8(float64(r>>8) * brightnessFactor)
+			adjustedG := uint8(float64(g>>8) * brightnessFactor)
+			adjustedB := uint8(float64(b>>8) * brightnessFactor)
+			adjustedImage.Set(x, y, color.RGBA{adjustedR, adjustedG, adjustedB, uint8(a >> 8)})
+		}
+	}
+
+	return adjustedImage
+}
+
+func adjustImageContrast(img image.Image, contrastFactor float64) image.Image {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	adjustedImage := image.NewRGBA(bounds)
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			adjustedR := uint8(float64(r>>8) * contrastFactor)
+			adjustedG := uint8(float64(g>>8) * contrastFactor)
+			adjustedB := uint8(float64(b>>8) * contrastFactor)
+			adjustedImage.Set(x, y, color.RGBA{adjustedR, adjustedG, adjustedB, uint8(a >> 8)})
+		}
+	}
+
+	return adjustedImage
+}
+
+func adjustImageGamma(img image.Image, gammaFactor float64) image.Image {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	adjustedImage := image.NewRGBA(bounds)
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			adjustedR := uint8(float64(r>>8) / gammaFactor)
+			adjustedG := uint8(float64(g>>8) / gammaFactor)
+			adjustedB := uint8(float64(b>>8) / gammaFactor)
+			adjustedImage.Set(x, y, color.RGBA{adjustedR, adjustedG, adjustedB, uint8(a >> 8)})
+		}
+	}
+
+	return adjustedImage
+}
+
+func adjustImageColors(img image.Image, redFactor, greenFactor, blueFactor float64) image.Image {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	adjustedImage := image.NewRGBA(bounds)
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			adjustedR := uint8(float64(r>>8) * redFactor)
+			adjustedG := uint8(float64(g>>8) * greenFactor)
+			adjustedB := uint8(float64(b>>8) * blueFactor)
+			adjustedImage.Set(x, y, color.RGBA{adjustedR, adjustedG, adjustedB, uint8(a >> 8)})
+		}
+	}
+
+	return adjustedImage
 }
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,19 +150,93 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		tasks[taskID] = &AnalysisResult{ImagePath: filePath}
 		mu.Unlock()
 
-		go analyzeImage(taskID, filePath)
+		go processAndAnalyze(taskID, filePath)
 
-		// Отправляем JSON вместо редиректа
 		response := map[string]string{"task_id": taskID}
 		json.NewEncoder(w).Encode(response)
 	}
 }
 
-func analyzeImage(taskID, filePath string) {
+func processAndAnalyze(taskID, filePath string) {
 	var wg sync.WaitGroup
 	task := tasks[taskID]
 
-	wg.Add(4)
+	modifiedImages := []string{}
+	brightness := 2.5
+	contrast := 2.5
+	gamma := 0.5
+	redFactor := 2.0
+	greenFactor := 1.5
+	blueFactor := 1.0
+
+	imgFile, err := os.Open(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer imgFile.Close()
+
+	img, _, err := image.Decode(imgFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	brightnessFile := filepath.Join(uploadDir, fmt.Sprintf("%s_brightness.jpg", taskID))
+	brightnessImage := adjustImageBrightness(img, brightness)
+	output, err := os.Create(brightnessFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer output.Close()
+
+	err = jpeg.Encode(output, brightnessImage, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	modifiedImages = append(modifiedImages, brightnessFile)
+
+	contrastFile := filepath.Join(uploadDir, fmt.Sprintf("%s_contrast.jpg", taskID))
+	contrastImage := adjustImageContrast(img, contrast)
+	output, err = os.Create(contrastFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer output.Close()
+
+	err = jpeg.Encode(output, contrastImage, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	modifiedImages = append(modifiedImages, contrastFile)
+
+	gammaFile := filepath.Join(uploadDir, fmt.Sprintf("%s_gamma.jpg", taskID))
+	gammaImage := adjustImageGamma(img, gamma)
+	output, err = os.Create(gammaFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer output.Close()
+
+	err = jpeg.Encode(output, gammaImage, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	modifiedImages = append(modifiedImages, gammaFile)
+
+	colorFile := filepath.Join(uploadDir, fmt.Sprintf("%s_color.jpg", taskID))
+	colorImage := adjustImageColors(img, redFactor, greenFactor, blueFactor)
+	output, err = os.Create(colorFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer output.Close()
+
+	err = jpeg.Encode(output, colorImage, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	modifiedImages = append(modifiedImages, colorFile)
+
+	wg.Add(5)
 
 	go func() {
 		defer wg.Done()
@@ -104,10 +254,16 @@ func analyzeImage(taskID, filePath string) {
 		defer wg.Done()
 		task.BinwalkData = runCmd("binwalk", filePath)
 	}()
+	go func() {
+		defer wg.Done()
+		task.Zsteg = runCmd("zsteg", "-a", brightnessFile)
+	}()
 
 	wg.Wait()
+
 	mu.Lock()
 	task.Done = true
+	task.ModifiedImages = modifiedImages
 	mu.Unlock()
 }
 
@@ -150,5 +306,5 @@ func main() {
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 
 	fmt.Println("Сервер запущен на http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8082", nil))
 }
